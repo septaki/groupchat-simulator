@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Runtime data (contains personal info)
+conversations/
+agents/*/memory.md
+agents/*/state.md
+settings.json
+
+# OS
+.DS_Store
+Thumbs.db
+*.pid

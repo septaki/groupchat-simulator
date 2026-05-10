@@ -1,0 +1,2022 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<title>NEST-chat</title>
+<style>
+:root {
+  --bg: #1a1a2e;
+  --bg-secondary: #16213e;
+  --bg-input: #0f0f23;
+  --text: #e0e0e0;
+  --text-secondary: #888;
+  --bubble-user: #2563eb;
+  --bubble-user-text: #fff;
+  --border: #2a2a4a;
+  --font-size: 14px;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: 'Microsoft YaHei', 'PingFang SC', 'Segoe UI', sans-serif;
+  color: #e0e0e0;
+  margin: 0; padding: 0;
+  overflow: hidden; overscroll-behavior: none;
+  transition: background 0.6s ease;
+}
+
+#app {
+  width: 100%; max-width: 700px;
+  position: fixed; top: 0; bottom: 0; left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: column;
+  overscroll-behavior: none;
+  background: var(--bg);
+  box-shadow: 0 0 60px rgba(0,0,0,0.3);
+  transition: background 0.6s ease;
+}
+@media (min-width: 701px) {
+  body { display: flex; justify-content: center; align-items: center; }
+  #app { position: relative; top: auto; bottom: auto; left: auto; transform: none; height: 100vh; }
+}
+
+/* ===== HEADER ===== */
+#header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px; background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+#header .title { font-size: 16px; font-weight: 600; color: #ffffff; }
+#header .controls { display: flex; gap: 8px; align-items: center; }
+.mode-btn, .settings-btn {
+  padding: 6px 12px; border-radius: 16px; border: 1px solid var(--border);
+  background: transparent; color: var(--text); font-size: 13px;
+  cursor: pointer; transition: all 0.2s; white-space: nowrap;
+}
+.mode-btn:hover, .settings-btn:hover { border-color: #888; }
+.mode-btn.active { background: #7c3aed; border-color: #7c3aed; color: #fff; }
+.mode-btn.watch-active { background: #dc2626; border-color: #dc2626; color: #fff; }
+#btn-stop {
+  padding: 6px 12px; border-radius: 16px; border: 1px solid #dc2626;
+  background: transparent; color: #dc2626; font-size: 13px;
+  cursor: pointer; display: none; transition: all 0.2s;
+}
+#btn-stop.show { display: inline-block; }
+
+/* ===== MESSAGES ===== */
+#messages {
+  flex: 1; overflow-y: auto; padding: 20px;
+  display: flex; flex-direction: column; gap: 6px; scroll-behavior: smooth;
+}
+#messages::-webkit-scrollbar { width: 5px; }
+#messages::-webkit-scrollbar-track { background: transparent; }
+#messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
+
+.msg-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  margin-bottom: 12px; animation: fadeIn 0.3s ease;
+}
+.msg-row.user { flex-direction: row-reverse; }
+@keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+.msg-avatar {
+  width: 38px; height: 38px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; flex-shrink: 0; background: var(--bg-secondary);
+  border: 2px solid var(--border); user-select: none;
+  background-size: cover; background-position: center;
+  overflow: hidden;
+}
+.msg-avatar img { width:100%; height:100%; object-fit:cover; }
+.msg-avatar.user-avatar { background: #1e3a5f; border-color: #2563eb; }
+
+.msg-body { display: flex; flex-direction: column; max-width: 75%; }
+.msg-row.user .msg-body { align-items: flex-end; }
+
+.msg-sender { font-size: 11px; color: var(--text-secondary); margin-bottom: 3px; padding: 0 6px; font-family: 'Microsoft YaHei', 'PingFang SC', sans-serif; }
+.msg-row.user .msg-sender { text-align: right; }
+
+.msg-bubble {
+  padding: 10px 14px; border-radius: 18px; font-size: var(--font-size);
+  line-height: 1.6; word-break: break-word; position: relative;
+  color: #e0e0e0;
+}
+.msg-row:not(.user) .msg-bubble { background: var(--bg-secondary); border-top-left-radius: 4px; }
+.msg-row.user .msg-bubble { background: var(--bubble-user); color: #ffffff !important; border-top-right-radius: 4px; }
+
+.msg-emote { margin-top: 6px; max-width: 160px; border-radius: 10px; overflow: hidden; }
+.msg-emote img { width: 100%; display: block; border-radius: 10px; }
+
+.typing-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding-left: 48px; }
+.typing-text { font-size: 12px; color: var(--text-secondary); font-style: italic; }
+.typing-dots { display: inline-flex; gap: 4px; margin-left: 6px; }
+.typing-dots span {
+  width: 6px; height: 6px; border-radius: 50%; background: #666;
+  animation: dotBounce 1.2s infinite;
+}
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes dotBounce { 0%,60%,100%{transform:translateY(0);opacity:0.3} 30%{transform:translateY(-6px);opacity:1} }
+
+.auto-indicator {
+  text-align: center; font-size: 12px; color: var(--text-secondary);
+  margin: 8px 0; padding: 6px; background: rgba(124,58,237,0.1); border-radius: 10px;
+}
+
+#status { text-align: center; font-size: 11px; color: var(--text-secondary); padding: 4px; flex-shrink: 0; }
+#status.connected { color: #22c55e; }
+#status.disconnected { color: #ef4444; }
+
+/* ===== INPUT ===== */
+#input-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 20px; padding-bottom: max(14px, env(safe-area-inset-bottom, 14px));
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border); flex-shrink: 0;
+}
+#input-msg {
+  flex: 1; padding: 10px 16px; border-radius: 22px;
+  border: 1px solid var(--border); background: var(--bg-input);
+  color: #e0e0e0; font-size: var(--font-size); outline: none;
+  transition: border-color 0.2s; font-family: inherit;
+}
+#input-msg:focus { border-color: #7c3aed; }
+#input-msg::placeholder { color: #555; }
+#btn-send {
+  width: 40px; height: 40px; border-radius: 50%; border: none;
+  background: #7c3aed; color: #fff; font-size: 18px; cursor: pointer;
+  transition: all 0.2s; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+#btn-send:hover { background: #6d28d9; transform: scale(1.05); }
+#btn-send:disabled { background: #444; cursor: not-allowed; transform: none; }
+
+/* ===== SETTINGS DRAWER ===== */
+#settings-overlay {
+  position: fixed; top:0; left:0; right:0; bottom:0;
+  background: rgba(0,0,0,0.5); z-index:100; display:none; justify-content:flex-end;
+}
+#settings-overlay.open { display: flex; }
+#settings-drawer {
+  width: 420px; max-width: 100vw; height: 100%;
+  background: var(--bg-secondary); border-left: 1px solid var(--border);
+  display: flex; flex-direction: column; overflow-y: auto;
+  animation: slideIn 0.25s ease;
+}
+@keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+#settings-drawer h3 { padding: 20px 24px 12px; font-size: 18px; border-bottom: 1px solid var(--border); }
+.settings-section { padding: 16px 24px; border-bottom: 1px solid rgba(255,255,255,0.05); }
+.settings-section h4 { font-size: 14px; margin-bottom: 10px; color: var(--text-secondary); }
+
+.agent-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+.agent-tab {
+  padding: 6px 16px; border-radius: 14px; border: 1px solid var(--border);
+  background: transparent; color: var(--text); font-size: 13px; cursor: pointer;
+  transition: all 0.2s;
+}
+.agent-tab.active { background: #7c3aed; border-color: #7c3aed; }
+
+.setting-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px; font-size: 13px;
+}
+.setting-row label { color: var(--text-secondary); min-width: 80px; }
+.setting-row select, .setting-row input[type="range"] { flex: 1; margin: 0 10px; }
+.setting-row select {
+  padding: 6px 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--bg-input); color: var(--text); font-size: 13px; cursor: pointer;
+}
+.setting-row .range-val { min-width: 36px; text-align: right; font-size: 12px; color: var(--text-secondary); }
+input[type="range"] {
+  -webkit-appearance: none; height: 4px; border-radius: 2px;
+  background: var(--border); outline: none; cursor: pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 18px; height: 18px;
+  border-radius: 50%; background: #7c3aed; cursor: pointer;
+}
+
+/* Preset grid */
+.preset-grid {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 10px;
+}
+.preset-item {
+  width: 100%; aspect-ratio: 1; border-radius: 50%; border: 3px solid transparent;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  font-size: 24px; transition: all 0.2s; background-size: cover; background-position: center;
+}
+.preset-item:hover { transform: scale(1.08); }
+.preset-item.selected { border-color: #7c3aed; box-shadow: 0 0 12px rgba(124,58,237,0.5); }
+
+/* Background presets are rectangular */
+.preset-grid.bg-grid { grid-template-columns: repeat(3, 1fr); }
+.preset-item.bg-item {
+  border-radius: 10px; aspect-ratio: 16/10; font-size: 14px; color: #fff;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+}
+
+.custom-btn {
+  display: block; width: 100%; padding: 8px; border-radius: 8px;
+  border: 1px dashed var(--border); background: transparent;
+  color: var(--text-secondary); font-size: 13px; cursor: pointer;
+  transition: all 0.2s; text-align: center; font-family: inherit;
+}
+.custom-btn:hover { border-color: #7c3aed; color: #c4b5fd; }
+
+.settings-actions {
+  padding: 20px 24px; display: flex; gap: 10px; position: sticky; bottom:0;
+  background: var(--bg-secondary); border-top: 1px solid var(--border);
+}
+.settings-actions button {
+  flex: 1; padding: 10px; border-radius: 10px; border: none;
+  font-size: 14px; cursor: pointer; transition: all 0.2s; font-family: inherit;
+}
+.btn-save { background: #7c3aed; color: #fff; }
+.btn-save:hover { background: #6d28d9; }
+.btn-cancel { background: transparent; border: 1px solid var(--border) !important; color: var(--text); }
+
+/* ===== IMAGE CROPPER MODAL ===== */
+#cropper-overlay {
+  position: fixed; top:0; left:0; right:0; bottom:0;
+  background: rgba(0,0,0,0.85); z-index:200; display:none;
+  flex-direction: column; align-items: center; justify-content: center;
+}
+#cropper-overlay.open { display: flex; }
+
+#cropper-container {
+  position: relative; overflow: hidden; cursor: grab;
+  max-width: 90vw; max-height: 70vh;
+}
+#cropper-container:active { cursor: grabbing; }
+#cropper-container img {
+  display: block; max-width: none; user-select: none; -webkit-user-drag: none;
+}
+#cropper-mask {
+  position: absolute; top:0; left:0; right:0; bottom:0; pointer-events: none;
+}
+#cropper-hint {
+  color: #aaa; font-size: 13px; margin-top: 16px; text-align: center;
+}
+.cropper-actions {
+  display: flex; gap: 12px; margin-top: 16px;
+}
+.cropper-actions button {
+  padding: 10px 28px; border-radius: 10px; border: none;
+  font-size: 14px; cursor: pointer; font-family: inherit; transition: all 0.2s;
+}
+.cropper-confirm { background: #7c3aed; color: #fff; }
+.cropper-confirm:hover { background: #6d28d9; }
+.cropper-cancel { background: transparent; border: 1px solid #555 !important; color: #aaa; }
+.cropper-cancel:hover { border-color: #888; color: #fff; }
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 500px) {
+  #messages { padding: 12px; }
+  #input-bar { padding: 10px 12px; }
+  .msg-bubble { font-size: 13px; padding: 8px 12px; }
+  .msg-avatar { width: 32px; height: 32px; font-size: 18px; }
+  #settings-drawer { width: 100vw; }
+  #conv-sidebar { width: 100vw !important; max-width: 100vw !important; }
+  .mode-btn, .settings-btn { padding: 5px 10px; font-size: 11px; }
+  .preset-grid { grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .preset-grid.bg-grid { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<!-- Sidebar Overlay -->
+<div id="sidebar-overlay" onclick="closeSidebar()" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);z-index:89;"></div>
+<!-- Conversation Sidebar -->
+<div id="conv-sidebar" style="position:fixed;top:0;left:0;bottom:0;width:280px;max-width:85vw;background:var(--bg-secondary);border-right:1px solid var(--border);z-index:90;display:none;flex-direction:column;overflow:hidden;">
+  <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+    <span style="font-weight:600;font-size:15px;">对话列表</span>
+    <div style="display:flex;gap:6px;">
+      <button onclick="newConversation()" style="padding:5px 12px;border-radius:12px;border:none;background:#7c3aed;color:#fff;font-size:12px;cursor:pointer;font-family:inherit;">+ 新建</button>
+      <button onclick="closeSidebar()" style="padding:5px 10px;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:14px;cursor:pointer;">✕</button>
+    </div>
+  </div>
+  <div id="conv-list" style="flex:1;overflow-y:auto;padding:8px;"></div>
+</div>
+
+<!-- Login Overlay -->
+<div id="login-overlay" style="position:fixed;top:0;left:0;right:0;bottom:0;background:var(--bg);z-index:999;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;">
+  <div style="font-size:32px;">🌸</div>
+  <div style="font-size:18px;font-weight:600;color:var(--text);">NEST-chat</div>
+  <div style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">请输入访问密码</div>
+  <input id="login-pwd" type="password" placeholder="密码" style="padding:10px 16px;border-radius:10px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:14px;width:240px;text-align:center;outline:none;font-family:inherit;" onkeydown="if(event.key==='Enter')doLogin()" />
+  <button onclick="doLogin()" style="padding:10px 32px;border-radius:10px;border:none;background:#7c3aed;color:#fff;font-size:14px;cursor:pointer;font-family:inherit;">进入</button>
+  <div id="login-error" style="font-size:12px;color:#ef4444;display:none;"></div>
+</div>
+
+<div id="app">
+  <div id="header">
+    <div class="title" onclick="toggleSidebar()" style="cursor:pointer;" title="对话列表">☰ NEST-chat</div>
+    <div class="controls">
+      <button class="mode-btn active" id="btn-mode-free" onclick="setMode('free')">闲聊</button>
+      <button class="mode-btn" id="btn-mode-watch" onclick="setMode('watch')">吃瓜</button>
+      <button class="mode-btn" id="btn-mode-party" onclick="openPartyModal()">跑团</button>
+      <button id="btn-stop" onclick="stopAuto()">停止</button>
+      <span style="color:var(--border);margin:0 4px;">|</span>
+      <button class="settings-btn" onclick="endSession()" id="btn-end" title="结束对话并保存记忆">结束</button>
+      <button class="settings-btn" onclick="openSettings()">设置</button>
+    </div>
+  </div>
+
+  <div id="messages"></div>
+  <div id="status" class="disconnected">未连接</div>
+
+  <div id="input-bar">
+    <input id="input-msg" type="text" placeholder="输入消息..." onkeydown="onKeyDown(event)" />
+    <button id="btn-send" onclick="sendMessage()" disabled>&#10140;</button>
+  </div>
+
+  <!-- Settings Drawer -->
+  <div id="settings-overlay" onclick="if(event.target===this)closeSettings()">
+    <div id="settings-drawer">
+      <h3>设置</h3>
+
+      <div class="settings-section">
+        <h4>Agent 开关</h4>
+        <div id="agent-toggles" style="display:flex;flex-direction:column;gap:8px;"></div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">关闭的agent不会回复，节省token</div>
+      </div>
+
+      <div class="settings-section">
+        <h4>Agent 行为</h4>
+        <div class="agent-tabs" id="agent-tabs"></div>
+        <div id="agent-settings"></div>
+      </div>
+
+      <div class="settings-section">
+        <h4>头像设置</h4>
+        <div class="agent-tabs" id="avatar-tabs"></div>
+        <div class="preset-grid" id="avatar-presets"></div>
+        <button class="custom-btn" onclick="openCropper('avatar')">+ 自定义头像</button>
+      </div>
+
+      <div class="settings-section">
+        <h4>表情管理</h4>
+        <div class="agent-tabs" id="emote-tabs"></div>
+        <div class="preset-grid" id="emote-grid" style="grid-template-columns:repeat(4,1fr);gap:8px;"></div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-top:6px;">点击表情可上传自定义图片替换（gif/png/jpg）</div>
+      </div>
+
+      <div class="settings-section">
+        <h4>个人设置</h4>
+        <div class="setting-row">
+          <label>我的昵称</label>
+          <input type="text" id="user-name-input" style="flex:1;margin:0 10px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px;font-family:inherit;" maxlength="12" />
+        </div>
+        <div style="font-size:12px;color:var(--text-secondary);margin-bottom:10px;">我的头像</div>
+        <div class="preset-grid" id="user-avatar-presets"></div>
+        <button class="custom-btn" onclick="openCropper('user_avatar')">+ 自定义头像</button>
+      </div>
+
+      <div class="settings-section">
+        <h4>外观设置</h4>
+        <div class="setting-row">
+          <label>字体大小</label>
+          <input type="range" id="global-fontsize" min="12" max="20" step="1" value="14" oninput="updateRange(this,'val-fontsize');applyFontLive()">
+          <span class="range-val" id="val-fontsize">14</span>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <h4>聊天背景</h4>
+        <div class="preset-grid bg-grid" id="bg-presets"></div>
+        <button class="custom-btn" onclick="openCropper('bg')">+ 自定义背景</button>
+      </div>
+
+      <div class="settings-section">
+        <h4>外框颜色</h4>
+        <div class="preset-grid bg-grid" id="frame-presets"></div>
+      </div>
+
+      <div class="settings-section">
+        <h4>安全</h4>
+        <div class="setting-row">
+          <label>访问密码</label>
+          <input type="password" id="global-password" placeholder="留空则不设密码" style="flex:1;margin:0 10px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px;font-family:inherit;" />
+        </div>
+        <div style="font-size:11px;color:var(--text-secondary);">设置后每次访问需要输入密码。留空则取消密码保护。</div>
+      </div>
+
+      <div class="settings-section">
+        <h4>全局</h4>
+        <div class="setting-row">
+          <label>模型</label>
+          <select id="global-model" style="flex:1;margin:0 10px;">
+            <option value="deepseek-v4-pro">DeepSeek V4 Pro</option>
+            <option value="deepseek-v4-flash">DeepSeek V4 Flash (更快更省)</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <label>围观轮数</label>
+          <input type="range" id="global-rounds" min="2" max="10" value="4" oninput="updateRange(this,'val-rounds')">
+          <span class="range-val" id="val-rounds">4</span>
+        </div>
+      </div>
+
+      <div class="settings-actions">
+        <button class="btn-cancel" onclick="closeSettings()">取消</button>
+        <button class="btn-save" onclick="saveSettings()">保存并应用</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Party Mode Modal -->
+  <div id="party-overlay" style="position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:150;display:none;justify-content:center;align-items:center;" onclick="if(event.target===this)closePartyModal()">
+    <div style="background:var(--bg-secondary);border-radius:16px;padding:28px;max-width:400px;width:90%;border:1px solid var(--border);">
+      <h3 style="margin-bottom:18px;">派对模式</h3>
+      <div class="setting-row">
+        <label>GM 主理人</label>
+        <select id="party-gm-select" style="flex:1;margin:0 10px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:13px;"></select>
+      </div>
+      <div class="setting-row">
+        <label>选项频率</label>
+        <input type="range" id="party-freq" min="4" max="10" value="7" oninput="updateRange(this,'val-party-freq')">
+        <span class="range-val" id="val-party-freq">7</span>
+      </div>
+      <div style="font-size:11px;color:var(--text-secondary);margin-bottom:12px;">每 N 轮对话给出一次选项。你可以随时说话来改变故事走向。</div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn-cancel" onclick="closePartyModal()" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:transparent;color:var(--text);cursor:pointer;">取消</button>
+        <button class="btn-save" onclick="startParty()" style="flex:1;padding:10px;border-radius:10px;border:none;background:#7c3aed;color:#fff;cursor:pointer;">开始游戏</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Choice Buttons (party mode) -->
+  <div id="choice-bar" style="display:none;padding:10px 20px;background:var(--bg-secondary);border-top:1px solid #7c3aed;flex-shrink:0;flex-direction:column;gap:6px;"></div>
+
+  <!-- Image Cropper Modal -->
+  <input type="file" id="hidden-file-input" accept="image/*" style="display:none" />
+  <div id="cropper-overlay" onclick="if(event.target===this)closeCropper()">
+    <div id="cropper-container">
+      <canvas id="cropper-mask" width="400" height="400"></canvas>
+    </div>
+    <div id="cropper-hint">拖动图片调整位置 · 滚轮缩放</div>
+    <div class="cropper-actions">
+      <button class="cropper-cancel" onclick="closeCropper()">取消</button>
+      <button class="cropper-confirm" onclick="confirmCrop()">确认</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// Auth
+// ============================================================
+let AUTH_TOKEN = sessionStorage.getItem('nest-token') || '';
+
+async function doLogin() {
+  const pwd = document.getElementById('login-pwd').value;
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  try {
+    const r = await fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: pwd }),
+    });
+    if (r.ok) {
+      AUTH_TOKEN = pwd;
+      sessionStorage.setItem('nest-token', pwd);
+      document.getElementById('login-overlay').style.display = 'none';
+      connect();
+    } else {
+      errEl.textContent = '密码错误';
+      errEl.style.display = 'block';
+    }
+  } catch(e) {
+    errEl.textContent = '连接失败';
+    errEl.style.display = 'block';
+  }
+}
+
+async function authFetch(url, options = {}) {
+  options.headers = options.headers || {};
+  if (AUTH_TOKEN) options.headers['Authorization'] = 'Bearer ' + AUTH_TOKEN;
+  return fetch(url, options);
+}
+
+// ============================================================
+// State
+// ============================================================
+const AGENTS = {};
+let ws = null;
+let currentMode = 'free';
+let typingAgents = new Set();
+let reconnectTimer = null;
+let appSettings = null;
+let selectedAgentTab = null;
+let selectedAvatarTab = null;
+
+// Avatar & Background state
+let avatarChoices = {};     // {agentName: 'presetId' | 'data:...'}
+let bgChoice = null;        // 'presetId' | 'data:...'  | null
+let frameChoice = 'midnight'; // 外框颜色预设
+let userName = '你';          // 用户显示名称
+let userAvatar = null;        // user avatar: 'presetId' | 'data:...' | null
+let cropperMode = null;     // 'avatar' | 'bg' | 'user_avatar'
+let cropperTarget = null;   // agent name (for avatar mode) or 'user'
+let cropperImg = null;      // HTMLImageElement
+let cropperScale = 1;       // zoom level
+let cropperOffset = { x: 0, y: 0 };  // image offset
+let cropperDrag = null;
+
+// ============================================================
+// Presets
+// ============================================================
+const AVATAR_PRESETS = [
+  { id: '🌸', type: 'emoji', color: '#f472b6' },
+  { id: '🌙', type: 'emoji', color: '#a78bfa' },
+  { id: '⭐', type: 'emoji', color: '#fbbf24' },
+  { id: '🐱', type: 'emoji', color: '#f97316' },
+  { id: '💜', type: 'emoji', color: '#ec4899' },
+  { id: '❄️', type: 'emoji', color: '#38bdf8' },
+  { id: '🔥', type: 'emoji', color: '#ef4444' },
+  { id: '🍃', type: 'emoji', color: '#22c55e' },
+  { id: '🎀', type: 'emoji', color: '#f472b6' },
+  { id: '💀', type: 'emoji', color: '#9ca3af' },
+];
+
+const USER_AVATAR_PRESETS = [
+  { id: '😎', color: '#3b82f6' },
+  { id: '🦊', color: '#f59e0b' },
+  { id: '🐻', color: '#8b5cf6' },
+  { id: '🐼', color: '#22c55e' },
+  { id: '🦁', color: '#ef4444' },
+  { id: '🐰', color: '#ec4899' },
+  { id: '🐺', color: '#6b7280' },
+  { id: '👑', color: '#eab308' },
+];
+
+const BG_PRESETS = [
+  { id: 'default',  name: '默认', css: 'transparent' },
+  { id: 'charcoal', name: '炭灰', css: 'linear-gradient(180deg, #1f2128 0%, #242730 50%, #20232a 100%)' },
+  { id: 'navy',     name: '深蓝', css: 'linear-gradient(180deg, #1c2330 0%, #222a3a 50%, #1e2533 100%)' },
+  { id: 'mauve',    name: '暗紫', css: 'linear-gradient(180deg, #1f1e2a 0%, #262435 50%, #21202e 100%)' },
+  { id: 'olive',    name: '苔色', css: 'linear-gradient(180deg, #1d211e 0%, #232925 50%, #1f2320 100%)' },
+  { id: 'teal',     name: '青灰', css: 'linear-gradient(180deg, #1d262c 0%, #232d35 50%, #1f2830 100%)' },
+  { id: 'sepia',    name: '褐灰', css: 'linear-gradient(180deg, #22201e 0%, #2a2824 50%, #24221f 100%)' },
+];
+
+// ============================================================
+// Avatar / Background helpers
+// ============================================================
+function getAvatarData(agentName) {
+  const raw = avatarChoices[agentName];
+  if (!raw || raw.startsWith('data:')) return raw;
+  // It's a preset emoji ID
+  const preset = AVATAR_PRESETS.find(p => p.id === raw);
+  return preset || AVATAR_PRESETS[0];
+}
+
+const FRAME_PRESETS = [
+  { id: 'midnight', name: '午夜',  css: '#0f0f1a' },
+  { id: 'pitch',   name: '纯黑',  css: '#08080f' },
+  { id: 'abyss',   name: '深渊',  css: '#0a0a14' },
+  { id: 'shadow',  name: '暗影',  css: '#111122' },
+  { id: 'onyx',    name: '黑玛瑙', css: '#0d0d1a' },
+  { id: 'void',    name: '虚空',  css: '#060610' },
+];
+
+function getFrameCSS() {
+  const preset = FRAME_PRESETS.find(p => p.id === frameChoice);
+  return preset ? preset.css : FRAME_PRESETS[0].css;
+}
+
+function applyFrame() {
+  document.body.style.background = getFrameCSS();
+  document.getElementById('app').style.background = getFrameCSS();
+}
+
+function getBgCSS() {
+  if (!bgChoice) return null;
+  if (bgChoice.startsWith('data:')) return `url(${bgChoice}) center/cover no-repeat`;
+  const preset = BG_PRESETS.find(p => p.id === bgChoice);
+  return preset ? preset.css : null;
+}
+
+function applyAvatar(agentName) {
+  // This will be used when rendering messages
+}
+
+function applyBackground() {
+  const msgs = document.getElementById('messages');
+  if (!msgs) return;
+  const css = getBgCSS();
+  // Reset first
+  msgs.style.background = '';
+  msgs.style.backgroundImage = '';
+  if (!css) return;
+  // For image URLs, set individual properties
+  if (css.startsWith('url(')) {
+    const url = css.match(/url\(([^)]+)\)/)?.[1] || '';
+    msgs.style.backgroundImage = `url(${url})`;
+    msgs.style.backgroundSize = 'cover';
+    msgs.style.backgroundPosition = 'center';
+    msgs.style.backgroundRepeat = 'no-repeat';
+  } else {
+    msgs.style.background = css;
+  }
+}
+
+function renderAvatarEl(el, agentName) {
+  const data = getAvatarData(agentName);
+  if (!data) return;
+  if (typeof data === 'string' && data.startsWith('data:')) {
+    el.innerHTML = `<img src="${data}" />`;
+  } else if (data && data.id) {
+    el.style.background = data.color;
+    el.textContent = data.id;
+    el.innerHTML = ''; // clear img if any
+    el.textContent = data.id;
+  }
+}
+
+function getUserAvatarData() {
+  if (!userAvatar) return USER_AVATAR_PRESETS[0]; // default
+  if (userAvatar.startsWith('data:')) return userAvatar;
+  const preset = USER_AVATAR_PRESETS.find(p => p.id === userAvatar);
+  return preset || USER_AVATAR_PRESETS[0];
+}
+
+function loadAppearance() {
+  try {
+    avatarChoices = JSON.parse(localStorage.getItem('nest-chat-avatars') || '{}');
+    bgChoice = localStorage.getItem('nest-chat-bg') || null;
+    frameChoice = localStorage.getItem('nest-chat-frame') || 'midnight';
+    userName = localStorage.getItem('nest-chat-username') || '你';
+    userAvatar = localStorage.getItem('nest-chat-useravatar') || null;
+  } catch(e) {
+    avatarChoices = {};
+    bgChoice = null;
+    frameChoice = 'midnight';
+    userName = '你';
+    userAvatar = null;
+  }
+  applyFrame();
+  applyBackground();
+}
+
+function saveAppearance() {
+  localStorage.setItem('nest-chat-avatars', JSON.stringify(avatarChoices));
+  if (bgChoice) localStorage.setItem('nest-chat-bg', bgChoice);
+  else localStorage.removeItem('nest-chat-bg');
+  localStorage.setItem('nest-chat-frame', frameChoice);
+  localStorage.setItem('nest-chat-username', userName);
+  if (userAvatar) localStorage.setItem('nest-chat-useravatar', userAvatar);
+  else localStorage.removeItem('nest-chat-useravatar');
+  applyFrame();
+  applyBackground();
+}
+
+// ============================================================
+// Settings Drawer
+// ============================================================
+function ensureAgentDefaults(name) {
+  if (!appSettings.agents[name]) appSettings.agents[name] = {};
+  const a = appSettings.agents[name];
+  if (!a.length) a.length = 'medium';
+  if (!a.emote_frequency) a.emote_frequency = (name === 'agent-2' ? 'frequent' : 'normal');
+  if (!a.temperature) a.temperature = (name === 'agent-2' ? 1.0 : 0.9);
+  if (!a.bubble_style) a.bubble_style = 'solid';
+  if (!a.bubble_color) a.bubble_color = '#1e2a3a';
+  if (!a.bubble_opacity) a.bubble_opacity = 30;
+}
+
+async function loadSettingsFromServer() {
+  try {
+    const r = await authFetch('/api/settings');
+    appSettings = await r.json();
+  } catch(e) {
+    appSettings = { agents: {}, global: { auto_chat_rounds: 4 } };
+  }
+  // Ensure every agent has all fields initialized
+  for (const name of Object.keys(AGENTS)) {
+    ensureAgentDefaults(name);
+  }
+  applyFontSettings();
+  renderSettingsPanel();
+}
+
+function renderSettingsPanel() {
+  if (!appSettings) return;
+  const agentNames = Object.keys(AGENTS);
+  if (agentNames.length === 0) return;
+
+  // Agent toggles
+  renderAgentToggles();
+
+  // Agent tabs
+  const tabsEl = document.getElementById('agent-tabs');
+  tabsEl.innerHTML = '';
+  agentNames.forEach((name, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'agent-tab' + (i === 0 ? ' active' : '');
+    btn.textContent = name;
+    btn.onclick = () => selectAgentTab(name);
+    tabsEl.appendChild(btn);
+  });
+  selectedAgentTab = agentNames[0];
+  renderAgentSettings(selectedAgentTab);
+
+  // Avatar tabs
+  const avTabsEl = document.getElementById('avatar-tabs');
+  avTabsEl.innerHTML = '';
+  agentNames.forEach((name, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'agent-tab' + (i === 0 ? ' active' : '');
+    btn.textContent = name;
+    btn.onclick = () => selectAvatarTab(name);
+    avTabsEl.appendChild(btn);
+  });
+  selectedAvatarTab = agentNames[0];
+  renderAvatarPresets(selectedAvatarTab);
+
+  // Emote tabs
+  const emTabsEl = document.getElementById('emote-tabs');
+  emTabsEl.innerHTML = '';
+  agentNames.forEach((name, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'agent-tab' + (i === 0 ? ' active' : '');
+    btn.textContent = name;
+    btn.onclick = () => selectEmoteTab(name);
+    emTabsEl.appendChild(btn);
+  });
+  renderEmoteGrid(agentNames[0]);
+
+  // User settings
+  document.getElementById('user-name-input').value = userName;
+  renderUserAvatarPresets();
+
+  // Font size
+  const fontSize = localStorage.getItem('nest-chat-fontsize') || 14;
+  document.getElementById('global-fontsize').value = fontSize;
+  document.getElementById('val-fontsize').textContent = fontSize;
+
+  // Background presets
+  renderBgPresets();
+  renderFramePresets();
+
+  // Password
+  document.getElementById('global-password').value = appSettings.password || '';
+
+  // Global
+  const model = appSettings.global?.model || 'deepseek-v4-pro';
+  document.getElementById('global-model').value = model;
+  const rounds = appSettings.global?.auto_chat_rounds || 4;
+  document.getElementById('global-rounds').value = rounds;
+  document.getElementById('val-rounds').textContent = rounds;
+}
+
+function renderUserAvatarPresets() {
+  const grid = document.getElementById('user-avatar-presets');
+  grid.innerHTML = '';
+  const current = userAvatar || USER_AVATAR_PRESETS[0].id;
+  USER_AVATAR_PRESETS.forEach(p => {
+    const el = document.createElement('div');
+    el.className = 'preset-item' + (current === p.id ? ' selected' : '');
+    el.style.background = p.color;
+    el.textContent = p.id;
+    el.onclick = () => { userAvatar = p.id; renderUserAvatarPresets(); };
+    grid.appendChild(el);
+  });
+  // Custom user avatar thumbnail
+  if (current && current.startsWith('data:')) {
+    const el = document.createElement('div');
+    el.className = 'preset-item selected';
+    el.style.backgroundImage = `url(${current})`;
+    el.style.backgroundSize = 'cover';
+    el.style.backgroundPosition = 'center';
+    el.onclick = () => { userAvatar = current; renderUserAvatarPresets(); };
+    grid.appendChild(el);
+  }
+}
+
+function selectAgentTab(name) {
+  selectedAgentTab = name;
+  document.querySelectorAll('#agent-tabs .agent-tab').forEach(b => {
+    b.classList.toggle('active', b.textContent === name);
+  });
+  renderAgentSettings(name);
+}
+
+function selectAvatarTab(name) {
+  selectedAvatarTab = name;
+  document.querySelectorAll('#avatar-tabs .agent-tab').forEach(b => {
+    b.classList.toggle('active', b.textContent === name);
+  });
+  renderAvatarPresets(name);
+}
+
+function renderAgentSettings(name) {
+  ensureAgentDefaults(name);
+  const cfg = appSettings.agents[name];
+  const fc = getAgentFontColor(name);
+  document.getElementById('agent-settings').innerHTML = `
+    <div class="setting-row">
+      <label>回复长度</label>
+      <select id="set-${name}-length" autocomplete="off" onchange="onSettingChange('${name}')">
+        <option value="short" ${cfg.length==='short'?'selected':''}>短 (1-2句)</option>
+        <option value="medium" ${cfg.length==='medium'?'selected':''}>中 (1-4句)</option>
+        <option value="long" ${cfg.length==='long'?'selected':''}>长 (3-8句)</option>
+      </select>
+    </div>
+    <div class="setting-row">
+      <label>表情频率</label>
+      <select id="set-${name}-emote" autocomplete="off" onchange="onSettingChange('${name}')">
+        <option value="rare" ${cfg.emote_frequency==='rare'?'selected':''}>很少</option>
+        <option value="normal" ${cfg.emote_frequency==='normal'?'selected':''}>正常</option>
+        <option value="frequent" ${cfg.emote_frequency==='frequent'?'selected':''}>频繁</option>
+      </select>
+    </div>
+    <div class="setting-row">
+      <label>气泡样式</label>
+      <select id="set-${name}-bubstyle" autocomplete="off" onchange="onSettingChange('${name}')">
+        <option value="solid" ${cfg.bubble_style==='solid'?'selected':''}>实色底</option>
+        <option value="transparent" ${cfg.bubble_style==='transparent'?'selected':''}>半透明主题色</option>
+      </select>
+    </div>
+    <div class="setting-row" id="row-${name}-bubcolor" style="${cfg.bubble_style!=='solid'?'display:none':''}">
+      <label>实色底颜色</label>
+      <select id="set-${name}-bubcolor" autocomplete="off" onchange="onSettingChange('${name}')">
+        <option value="#1e2a3a" ${(cfg.bubble_color||'#1e2a3a')==='#1e2a3a'?'selected':''}>深蓝灰</option>
+        <option value="#2a1e2a" ${cfg.bubble_color==='#2a1e2a'?'selected':''}>深紫</option>
+        <option value="#2e1e24" ${cfg.bubble_color==='#2e1e24'?'selected':''}>深粉</option>
+        <option value="#1e2422" ${cfg.bubble_color==='#1e2422'?'selected':''}>深绿</option>
+        <option value="#26201a" ${cfg.bubble_color==='#26201a'?'selected':''}>深棕</option>
+        <option value="#1a1a1a" ${cfg.bubble_color==='#1a1a1a'?'selected':''}>纯黑</option>
+        <option value="#1e2a30" ${cfg.bubble_color==='#1e2a30'?'selected':''}>深青</option>
+        <option value="#2a201e" ${cfg.bubble_color==='#2a201e'?'selected':''}>赭石</option>
+        <option value="#251e2e" ${cfg.bubble_color==='#251e2e'?'selected':''}>靛紫</option>
+      </select>
+    </div>
+    <div class="setting-row" id="row-${name}-bubopac" style="${cfg.bubble_style==='solid'?'display:none':''}">
+      <label>气泡浓度</label>
+      <input type="range" id="set-${name}-bubopac" min="10" max="80" step="5"
+             value="${cfg.bubble_opacity||30}" oninput="updateRange(this,'val-${name}-bubopac');onSettingChange('${name}')">
+      <span class="range-val" id="val-${name}-bubopac">${cfg.bubble_opacity||30}</span>
+    </div>
+    <div class="setting-row">
+      <label>字体颜色</label>
+      <select id="set-${name}-fontcolor" autocomplete="off" onchange="setAgentFontColor('${name}', this.value);refreshAgentBubbles('${name}')">
+        <option value="#e0e0e0" ${fc==='#e0e0e0'?'selected':''}>浅灰</option>
+        <option value="#ffffff" ${fc==='#ffffff'?'selected':''}>白色</option>
+        <option value="#333333" ${fc==='#333333'?'selected':''}>黑色</option>
+        <option value="#fbbf24" ${fc==='#fbbf24'?'selected':''}>暖金</option>
+        <option value="#f472b6" ${fc==='#f472b6'?'selected':''}>粉色</option>
+        <option value="#a78bfa" ${fc==='#a78bfa'?'selected':''}>淡紫</option>
+      </select>
+    </div>
+    <div class="setting-row">
+      <label>性格温度</label>
+      <input type="range" id="set-${name}-temp" min="0.3" max="1.8" step="0.1"
+             value="${cfg.temperature}" oninput="updateRange(this,'val-${name}-temp');onSettingChange('${name}')">
+      <span class="range-val" id="val-${name}-temp">${cfg.temperature}</span>
+    </div>
+  `;
+  // Force select values (prevent browser form state cache from cross-contaminating)
+  ['length','emote','bubstyle','bubcolor','fontcolor'].forEach(k => {
+    const el = document.getElementById(`set-${name}-${k}`);
+    if (!el) return;
+    if (k === 'fontcolor') el.value = fc;
+    else if (k === 'length') el.value = cfg.length || 'medium';
+    else if (k === 'emote') el.value = cfg.emote_frequency || 'normal';
+    else if (k === 'bubstyle') el.value = cfg.bubble_style || 'solid';
+    else if (k === 'bubcolor') el.value = cfg.bubble_color || '#1e2a3a';
+  });
+  // Toggle color/opacity rows
+  const bsEl = document.getElementById(`set-${name}-bubstyle`);
+  if (bsEl) {
+    const toggle = () => {
+      const colorRow = document.getElementById(`row-${name}-bubcolor`);
+      const opacRow = document.getElementById(`row-${name}-bubopac`);
+      const isSolid = bsEl.value === 'solid';
+      if (colorRow) colorRow.style.display = isSolid ? '' : 'none';
+      if (opacRow) opacRow.style.display = isSolid ? 'none' : '';
+    };
+    bsEl.addEventListener('change', toggle);
+    toggle();
+  }
+}
+
+const EMOTE_LABELS = {
+  happy:'开心', sad:'伤心', shy:'害羞', angry:'生气',
+  surprised:'惊讶', cute:'卖萌', love:'爱心', thinking:'思考'
+};
+
+let selectedEmoteTab = null;
+let emoteListCache = {}; // {agentName: [{mood, url}]}
+
+async function selectEmoteTab(name) {
+  selectedEmoteTab = name;
+  document.querySelectorAll('#emote-tabs .agent-tab').forEach(b => {
+    b.classList.toggle('active', b.textContent === name);
+  });
+  await renderEmoteGrid(name);
+}
+
+async function renderEmoteGrid(agentName) {
+  const grid = document.getElementById('emote-grid');
+  grid.innerHTML = '<div style="grid-column:1/-1;color:var(--text-secondary);font-size:13px;">加载中...</div>';
+  try {
+    const r = await authFetch(`/api/emotes/${agentName}`);
+    const emotes = await r.json();
+    emoteListCache[agentName] = emotes;
+    grid.innerHTML = '';
+    Object.entries(EMOTE_LABELS).forEach(([mood, label]) => {
+      const found = emotes.find(e => e.mood === mood);
+      const url = found ? found.url : null;
+      const el = document.createElement('div');
+      el.style.cssText = 'aspect-ratio:1;border-radius:12px;border:1px solid var(--border);cursor:pointer;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;transition:all 0.2s;';
+      el.title = `${label} — 点击上传自定义`;
+      if (url) {
+        el.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:contain;" />`;
+      } else {
+        el.textContent = label;
+        el.style.color = 'var(--text-secondary)';
+        el.style.fontSize = '12px';
+      }
+      el.onclick = () => uploadEmote(agentName, mood);
+      grid.appendChild(el);
+    });
+  } catch(e) {
+    grid.innerHTML = '<div style="color:var(--text-secondary)">加载失败</div>';
+  }
+}
+
+function uploadEmote(agentName, mood) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      const r = await authFetch(`/api/emotes/${agentName}/${mood}`, { method:'POST', body:form });
+      if (r.ok) {
+        await renderEmoteGrid(agentName);
+      }
+    } catch(ex) {
+      console.error('Upload failed:', ex);
+    }
+  };
+  input.click();
+}
+
+function refreshAgentBubbles(name) {
+  // Update existing bubbles on screen for the given agent
+  document.querySelectorAll('.msg-row:not(.user)').forEach(row => {
+    const sender = row.querySelector('.msg-sender');
+    if (sender && sender.textContent === name) {
+      const bubble = row.querySelector('.msg-bubble');
+      if (bubble) bubble.style.color = getAgentFontColor(name);
+    }
+  });
+}
+
+function renderAvatarPresets(agentName) {
+  const grid = document.getElementById('avatar-presets');
+  grid.innerHTML = '';
+  const current = avatarChoices[agentName] || AVATAR_PRESETS[0].id;
+
+  AVATAR_PRESETS.forEach(p => {
+    const el = document.createElement('div');
+    el.className = 'preset-item' + (current === p.id ? ' selected' : '');
+    el.style.background = p.color;
+    el.textContent = p.id;
+    el.title = p.id;
+    el.onclick = () => {
+      avatarChoices[agentName] = p.id;
+      renderAvatarPresets(agentName);
+    };
+    grid.appendChild(el);
+  });
+
+  // Custom option
+  const custom = avatarChoices[agentName];
+  if (custom && custom.startsWith('data:')) {
+    const el = document.createElement('div');
+    el.className = 'preset-item selected';
+    el.style.backgroundImage = `url(${custom})`;
+    el.style.backgroundSize = 'cover';
+    el.style.backgroundPosition = 'center';
+    el.textContent = '';
+    el.title = '自定义头像';
+    el.onclick = () => {
+      avatarChoices[agentName] = custom; // already selected
+      renderAvatarPresets(agentName);
+    };
+    grid.appendChild(el);
+  }
+}
+
+function renderBgPresets() {
+  const grid = document.getElementById('bg-presets');
+  grid.innerHTML = '';
+  const current = bgChoice || 'default';
+
+  BG_PRESETS.forEach(p => {
+    const el = document.createElement('div');
+    el.className = 'preset-item bg-item' + (current === p.id ? ' selected' : '');
+    el.style.background = p.css;
+    el.textContent = p.name;
+    el.onclick = () => {
+      bgChoice = p.id;
+      renderBgPresets();
+    };
+    grid.appendChild(el);
+  });
+
+  // Custom bg option
+  if (current && current.startsWith('data:')) {
+    const el = document.createElement('div');
+    el.className = 'preset-item bg-item selected';
+    el.style.backgroundImage = `url(${current})`;
+    el.style.backgroundSize = 'cover';
+    el.style.backgroundPosition = 'center';
+    el.textContent = '自定义';
+    el.onclick = () => {
+      bgChoice = current;
+      renderBgPresets();
+    };
+    grid.insertBefore(el, grid.firstChild);
+  }
+}
+
+function renderFramePresets() {
+  const grid = document.getElementById('frame-presets');
+  grid.innerHTML = '';
+  const current = frameChoice || 'midnight';
+  FRAME_PRESETS.forEach(p => {
+    const el = document.createElement('div');
+    el.className = 'preset-item bg-item' + (current === p.id ? ' selected' : '');
+    el.style.background = p.css;
+    el.textContent = p.name;
+    el.onclick = () => {
+      frameChoice = p.id;
+      renderFramePresets();
+    };
+    grid.appendChild(el);
+  });
+}
+
+function renderAgentToggles() {
+  const container = document.getElementById('agent-toggles');
+  container.innerHTML = '';
+  const status = appSettings.agent_status || {};
+  Object.keys(AGENTS).forEach(name => {
+    const online = status[name] !== false; // default true
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;';
+    row.innerHTML = `
+      <span style="font-size:13px;">${AGENTS[name].avatar || ''} ${name}</span>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;">
+        <span style="color:${online?'#22c55e':'#ef4444'};">${online?'在线':'离线'}</span>
+        <input type="checkbox" ${online?'checked':''} onchange="toggleAgent('${name}', this.checked)" style="accent-color:#7c3aed;">
+      </label>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function toggleAgent(name, online) {
+  if (!appSettings.agent_status) appSettings.agent_status = {};
+  appSettings.agent_status[name] = online;
+  renderAgentToggles();
+}
+
+function onSettingChange(name) {
+  if (!appSettings.agents[name]) appSettings.agents[name] = {};
+  ['length','emote_frequency'].forEach(k => {
+    const el = document.getElementById(`set-${name}-${k}`);
+    if (el) appSettings.agents[name][k] = el.value;
+  });
+  const tempEl = document.getElementById(`set-${name}-temp`);
+  if (tempEl) appSettings.agents[name].temperature = parseFloat(tempEl.value);
+  const bsEl = document.getElementById(`set-${name}-bubstyle`);
+  if (bsEl) appSettings.agents[name].bubble_style = bsEl.value;
+  const bcEl = document.getElementById(`set-${name}-bubcolor`);
+  if (bcEl) appSettings.agents[name].bubble_color = bcEl.value;
+  const boEl = document.getElementById(`set-${name}-bubopac`);
+  if (boEl) appSettings.agents[name].bubble_opacity = parseInt(boEl.value);
+}
+
+function updateRange(slider, valId) {
+  const el = document.getElementById(valId);
+  if (el) el.textContent = slider.value;
+}
+
+function openSettings() {
+  loadSettingsFromServer().then(() => {
+    document.getElementById('settings-overlay').classList.add('open');
+  });
+}
+
+function closeSettings() {
+  document.getElementById('settings-overlay').classList.remove('open');
+}
+
+async function saveSettings() {
+  for (const name of Object.keys(AGENTS)) {
+    ensureAgentDefaults(name);
+    onSettingChange(name);
+  }
+  appSettings.global = appSettings.global || {};
+  appSettings.global.auto_chat_rounds = parseInt(document.getElementById('global-rounds').value);
+  appSettings.global.model = document.getElementById('global-model').value;
+  appSettings.password = document.getElementById('global-password').value;
+  // Include agent_status
+  if (!appSettings.agent_status) appSettings.agent_status = {};
+  // Font settings are live-saved to localStorage (no server sync needed)
+  applyFontLive();
+  // Save user name
+  userName = document.getElementById('user-name-input').value.trim() || '你';
+  try {
+    const r = await authFetch('/api/settings', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({...appSettings, agent_status: appSettings.agent_status}),
+    });
+    if (r.ok) { appSettings = await r.json(); }
+  } catch(e) { console.error('Save settings failed:', e); }
+  saveAppearance();
+  closeSettings();
+}
+
+// Per-agent font color (localStorage, isolated per agent)
+function getAgentFontColor(name) {
+  return localStorage.getItem(`nest-chat-font-${name}`) || '#e0e0e0';
+}
+function setAgentFontColor(name, color) {
+  localStorage.setItem(`nest-chat-font-${name}`, color);
+}
+
+function applyFontSettings() {
+  const fontSize = localStorage.getItem('nest-chat-fontsize') || 14;
+  document.documentElement.style.setProperty('--font-size', fontSize + 'px');
+}
+
+function applyFontLive() {
+  const fsEl = document.getElementById('global-fontsize');
+  if (fsEl) { localStorage.setItem('nest-chat-fontsize', fsEl.value); }
+  applyFontSettings();
+}
+
+// ============================================================
+// Image Cropper — image moves behind a fixed crop window
+// ============================================================
+function openCropper(mode) {
+  cropperMode = mode === 'user_avatar' ? 'avatar' : mode;
+  cropperTarget = mode === 'user_avatar' ? 'user' : (mode === 'avatar' ? selectedAvatarTab : null);
+  const input = document.getElementById('hidden-file-input');
+  input.value = '';
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        cropperImg = img;
+        cropperScale = 1;
+        cropperOffset = { x: 0, y: 0 };
+        initCropperUI();
+        document.getElementById('cropper-overlay').classList.add('open');
+      };
+      img.onerror = () => { alert('图片加载失败'); };
+      img.src = ev.target.result;
+    };
+    reader.onerror = () => { alert('文件读取失败'); };
+    reader.readAsDataURL(file);
+  };
+  input.click();
+}
+
+function initCropperUI() {
+  const container = document.getElementById('cropper-container');
+  const maskCanvas = document.getElementById('cropper-mask');
+
+  // Container = crop window size
+  const maxSide = Math.min(window.innerWidth * 0.85, window.innerHeight * 0.55, 420);
+  let cw, ch;
+  if (cropperMode === 'avatar') {
+    cw = ch = maxSide;
+  } else {
+    // Tall crop area matching chat window proportions
+    cw = Math.min(window.innerWidth * 0.75, 420);
+    ch = Math.min(window.innerHeight * 0.7, 680);
+  }
+
+  container.style.width = cw + 'px';
+  container.style.height = ch + 'px';
+  container.style.position = 'relative';
+  container.style.overflow = 'hidden';
+
+  maskCanvas.width = cw;
+  maskCanvas.height = ch;
+  maskCanvas.style.position = 'absolute';
+  maskCanvas.style.top = '0';
+  maskCanvas.style.left = '0';
+  maskCanvas.style.pointerEvents = 'none';
+  maskCanvas.style.zIndex = '2';
+
+  // Image: fit-to-container (show full image, user zooms in to crop)
+  const fitScale = Math.min(cw / cropperImg.width, ch / cropperImg.height);
+  cropperScale = Math.max(fitScale, 0.15);
+  const imgW = cropperImg.width * cropperScale;
+  const imgH = cropperImg.height * cropperScale;
+  cropperOffset = { x: (cw - imgW) / 2, y: (ch - imgH) / 2 };
+
+  // Remove old image
+  const oldImg = container.querySelector('img');
+  if (oldImg) container.removeChild(oldImg);
+
+  const imgEl = document.createElement('img');
+  imgEl.id = 'cropper-img';
+  imgEl.src = cropperImg.src;
+  imgEl.style.position = 'absolute';
+  imgEl.style.top = '0';
+  imgEl.style.left = '0';
+  imgEl.style.transformOrigin = '0 0';
+  imgEl.style.userSelect = 'none';
+  imgEl.style.webkitUserDrag = 'none';
+  imgEl.style.pointerEvents = 'none';
+  container.appendChild(imgEl);
+
+  if (!container.contains(maskCanvas)) {
+    container.appendChild(maskCanvas);
+  }
+
+  updateImageTransform();
+  drawMask();
+
+  // --- Drag ---
+  container.onmousedown = (e) => {
+    cropperDrag = { sx: e.clientX, sy: e.clientY, ox: cropperOffset.x, oy: cropperOffset.y };
+    e.preventDefault();
+  };
+  container.ontouchstart = (e) => {
+    const t = e.touches[0];
+    cropperDrag = { sx: t.clientX, sy: t.clientY, ox: cropperOffset.x, oy: cropperOffset.y };
+  };
+
+  // --- Wheel zoom ---
+  container.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const oldScale = cropperScale;
+    const delta = e.deltaY > 0 ? -0.03 : 0.03;
+    cropperScale = Math.max(0.15, Math.min(4, cropperScale + delta));
+    const rect = container.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const ratio = cropperScale / oldScale;
+    cropperOffset.x = mx - ratio * (mx - cropperOffset.x);
+    cropperOffset.y = my - ratio * (my - cropperOffset.y);
+    updateImageTransform();
+    drawMask();
+  }, { passive: false });
+
+  // --- Pinch zoom (mobile) ---
+  let _pinchDist = 0, _pinchScale = 1;
+  container.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      _pinchDist = Math.sqrt(dx * dx + dy * dy);
+      _pinchScale = cropperScale;
+      cropperDrag = null;
+    }
+  }, { passive: false });
+  container.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2 && _pinchDist > 0) {
+      e.preventDefault();
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      cropperScale = Math.max(0.15, Math.min(4, _pinchScale * (dist / _pinchDist)));
+      updateImageTransform();
+      drawMask();
+    }
+  }, { passive: false });
+  container.addEventListener('touchend', () => { _pinchDist = 0; });
+
+  window._cropperMove = (e) => {
+    if (!cropperDrag) return;
+    const cx = e.clientX || (e.touches && e.touches[0].clientX);
+    const cy = e.clientY || (e.touches && e.touches[0].clientY);
+    if (cx == null) return;
+    cropperOffset.x = cropperDrag.ox + (cx - cropperDrag.sx);
+    cropperOffset.y = cropperDrag.oy + (cy - cropperDrag.sy);
+    updateImageTransform();
+    drawMask();
+  };
+
+  window._cropperEnd = () => { cropperDrag = null; };
+
+  document.addEventListener('mousemove', window._cropperMove);
+  document.addEventListener('mouseup', window._cropperEnd);
+  document.addEventListener('touchmove', window._cropperMove, { passive: false });
+  document.addEventListener('touchend', window._cropperEnd);
+}
+
+function clampOffset() {
+  // No clamping — allow free drag and zoom
+  // User can position the image however they want
+}
+
+function updateImageTransform() {
+  const img = document.getElementById('cropper-img');
+  if (!img) return;
+  const w = cropperImg.width * cropperScale;
+  const h = cropperImg.height * cropperScale;
+  img.style.width = w + 'px';
+  img.style.height = h + 'px';
+  img.style.transform = `translate(${cropperOffset.x}px, ${cropperOffset.y}px)`;
+}
+
+function drawMask() {
+  const canvas = document.getElementById('cropper-mask');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const cw = canvas.width;
+  const ch = canvas.height;
+
+  ctx.clearRect(0, 0, cw, ch);
+
+  // Dark overlay over the entire container
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(0, 0, cw, ch);
+
+  // Cut out the bright crop window
+  ctx.save();
+  ctx.globalCompositeOperation = 'destination-out';
+  if (cropperMode === 'avatar') {
+    const r = Math.min(cw, ch) / 2;
+    ctx.beginPath();
+    ctx.arc(cw / 2, ch / 2, r, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    // Full-container crop with thin dark border
+    const b = 2;
+    ctx.beginPath();
+    ctx.rect(0, 0, cw, ch);
+    ctx.rect(b, b, cw - b*2, ch - b*2);
+    ctx.fill('evenodd');
+  }
+  ctx.restore();
+
+  // Border around crop area
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([5, 3]);
+  if (cropperMode === 'avatar') {
+    const r = Math.min(cw, ch) / 2;
+    ctx.beginPath();
+    ctx.arc(cw / 2, ch / 2, r, 0, Math.PI * 2);
+    ctx.stroke();
+  } else {
+    // Border at the very edges
+    ctx.strokeRect(1, 1, cw - 2, ch - 2);
+  }
+  ctx.setLineDash([]);
+}
+
+function confirmCrop() {
+  if (!cropperImg || !cropperMode) return;
+
+  const container = document.getElementById('cropper-container');
+  const cw = container.offsetWidth;
+  const ch = container.offsetHeight;
+
+  // Map crop window (at container center) back to original image coordinates
+  // The image is scaled by cropperScale and offset by cropperOffset
+  const imgScale = cropperScale;
+  let srcX, srcY, srcW, srcH;
+
+  if (cropperMode === 'avatar') {
+    const r = Math.min(cw, ch) / 2;
+    const cx = cw / 2;
+    const cy = ch / 2;
+    srcX = (cx - r - cropperOffset.x) / imgScale;
+    srcY = (cy - r - cropperOffset.y) / imgScale;
+    srcW = srcH = (r * 2) / imgScale;
+  } else {
+    srcX = -cropperOffset.x / imgScale;
+    srcY = -cropperOffset.y / imgScale;
+    srcW = cw / imgScale;
+    srcH = ch / imgScale;
+  }
+
+  // Clamp to image bounds
+  srcX = Math.max(0, srcX);
+  srcY = Math.max(0, srcY);
+  srcW = Math.min(srcW, cropperImg.width - srcX);
+  srcH = Math.min(srcH, cropperImg.height - srcY);
+
+  const outW = cropperMode === 'avatar' ? 200 : 600;
+  const outH = cropperMode === 'avatar' ? 200 : 900;
+
+  const outCanvas = document.createElement('canvas');
+  outCanvas.width = outW;
+  outCanvas.height = outH;
+  const ctx = outCanvas.getContext('2d');
+  ctx.drawImage(cropperImg, srcX, srcY, srcW, srcH, 0, 0, outW, outH);
+
+  const dataUrl = outCanvas.toDataURL('image/jpeg', 0.85);
+
+  if (cropperMode === 'avatar') {
+    if (cropperTarget === 'user') {
+      userAvatar = dataUrl;
+      renderUserAvatarPresets();
+    } else {
+      avatarChoices[selectedAvatarTab] = dataUrl;
+      renderAvatarPresets(selectedAvatarTab);
+    }
+  } else {
+    bgChoice = dataUrl;
+    renderBgPresets();
+  }
+
+  cleanupCropper();
+  closeCropper();
+}
+
+function cleanupCropper() {
+  document.removeEventListener('mousemove', window._cropperMove);
+  document.removeEventListener('mouseup', window._cropperEnd);
+  document.removeEventListener('touchmove', window._cropperMove);
+  document.removeEventListener('touchend', window._cropperEnd);
+}
+
+function closeCropper() {
+  document.getElementById('cropper-overlay').classList.remove('open');
+  cropperImg = null;
+  cropperScale = 1;
+  cropperOffset = { x: 0, y: 0 };
+  cropperDrag = null;
+  cleanupCropper();
+}
+
+// ============================================================
+// WebSocket
+// ============================================================
+function connect() {
+  if (!AUTH_TOKEN) {
+    document.getElementById('login-overlay').style.display = 'flex';
+    return;
+  }
+  if (ws && ws.readyState === WebSocket.OPEN) return;
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const tokenParam = AUTH_TOKEN ? `?token=${encodeURIComponent(AUTH_TOKEN)}` : '';
+  ws = new WebSocket(`${protocol}//${location.host}/ws${tokenParam}`);
+
+  ws.onopen = () => {
+    setStatus('connected', '已连接');
+    $btnSend.disabled = false;
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    authFetch('/api/agents').then(r => r.json()).then(agents => {
+      agents.forEach(a => { AGENTS[a.name] = a; });
+    });
+    loadSettingsFromServer();
+  };
+
+  ws.onmessage = (e) => handleMessage(JSON.parse(e.data));
+
+  ws.onclose = () => {
+    setStatus('disconnected', '已断开 - 3秒后重连...');
+    $btnSend.disabled = true;
+    typingAgents.clear();
+    clearTypingIndicators();
+    reconnectTimer = setTimeout(connect, 3000);
+  };
+
+  ws.onerror = () => setStatus('disconnected', '连接错误');
+}
+
+function setStatus(cls, text) {
+  $status.className = cls;
+  $status.textContent = text;
+}
+
+// ============================================================
+// Message handling
+// ============================================================
+const streamingBubbles = {};
+
+function handleMessage(data) {
+  switch (data.type) {
+    case 'typing': showTyping(data.agent); break;
+    case 'message':
+      hideTyping(data.agent);
+      if (data.agent === '我') appendUserMessage(data.content);
+      else appendAgentMessage(data.agent, data.content, data.emote);
+      break;
+    case 'done': finishStreamingBubble(data.agent); break;
+    case 'auto_round': showAutoRound(data.round, data.total); break;
+    case 'auto_end': stopAutoUI(); break;
+    case 'mode_changed': currentMode = data.mode; updateModeUI(); break;
+    case 'session_ended': onSessionEnded(); break;
+    case 'history': loadChatHistory(data.messages); break;
+    case 'session_loaded':
+      currentConvId = data.conv_id;
+      currentConvTitle = data.conv_title;
+      document.getElementById('messages').innerHTML = '';
+      if (data.messages) data.messages.forEach(m => {
+        if (m.sender === '我') appendUserMessage(m.content);
+        else if (m.sender !== '系统') appendAgentMessage(m.sender, m.content, m.emote);
+      });
+      refreshConvList();
+      break;
+    case 'party_choices': showChoices(data.choices); break;
+    case 'party_round': break;
+    case 'error': alert(data.message); break;
+  }
+}
+
+function showTyping(agentName) {
+  if (typingAgents.has(agentName)) return;
+  typingAgents.add(agentName);
+  const row = document.createElement('div');
+  row.className = 'typing-row';
+  row.id = `typing-${agentName}`;
+  row.innerHTML = `<span class="typing-text">${agentName} 正在输入</span>
+    <span class="typing-dots"><span></span><span></span><span></span></span>`;
+  $messages.appendChild(row);
+  scrollBottom();
+}
+
+function hideTyping(agentName) {
+  typingAgents.delete(agentName);
+  const el = document.getElementById(`typing-${agentName}`);
+  if (el) el.remove();
+}
+
+function clearTypingIndicators() {
+  typingAgents.forEach(name => {
+    const el = document.getElementById(`typing-${name}`);
+    if (el) el.remove();
+  });
+  typingAgents.clear();
+}
+
+function appendUserMessage(content) {
+  const agent = { color: '#3b82f6', avatar: '😎', name: userName || '你' };
+  const row = createMsgRow(agent, content, null, true);
+  $messages.appendChild(row);
+  scrollBottom();
+}
+
+function appendAgentMessage(agentName, content, emote) {
+  const cfg = AGENTS[agentName] || { color: '#888', avatar: '🤖' };
+  const agent = { name: agentName, color: cfg.color, avatar: cfg.avatar };
+  const row = createMsgRow(agent, content, emote, false);
+  $messages.appendChild(row);
+  streamingBubbles[agentName] = { el: row.querySelector('.msg-bubble') };
+  scrollBottom();
+}
+
+function finishStreamingBubble(agentName) {
+  const sb = streamingBubbles[agentName];
+  if (sb) { const c = sb.el.querySelector('.cursor'); if (c) c.remove(); }
+  delete streamingBubbles[agentName];
+}
+
+function createMsgRow(agent, content, emote, isUser) {
+  const row = document.createElement('div');
+  row.className = 'msg-row' + (isUser ? ' user' : '');
+
+  const avatar = document.createElement('div');
+  avatar.className = 'msg-avatar' + (isUser ? ' user-avatar' : '');
+  avatar.style.borderColor = agent.color;
+
+  if (isUser) {
+    const ua = getUserAvatarData();
+    if (typeof ua === 'string' && ua.startsWith('data:')) {
+      avatar.style.backgroundImage = `url(${ua})`;
+      avatar.style.backgroundSize = 'cover';
+      avatar.style.backgroundPosition = 'center';
+      avatar.style.backgroundColor = '';
+      avatar.textContent = '';
+    } else if (ua && ua.id) {
+      avatar.style.backgroundImage = '';
+      avatar.style.backgroundColor = ua.color;
+      avatar.style.backgroundSize = '';
+      avatar.textContent = ua.id;
+    } else {
+      avatar.style.background = '#1e3a5f';
+      avatar.style.backgroundImage = '';
+      avatar.textContent = '😎';
+    }
+  } else {
+    const avatarData = getAvatarData(agent.name);
+    if (avatarData && typeof avatarData === 'string' && avatarData.startsWith('data:')) {
+      // Custom uploaded image — use background-image for reliable circular crop
+      avatar.style.backgroundImage = `url(${avatarData})`;
+      avatar.style.backgroundSize = 'cover';
+      avatar.style.backgroundPosition = 'center';
+      avatar.style.backgroundColor = '';
+      avatar.textContent = '';
+    } else if (avatarData && avatarData.id) {
+      // Preset emoji on colored background
+      avatar.style.backgroundImage = '';
+      avatar.style.backgroundColor = avatarData.color;
+      avatar.style.backgroundSize = '';
+      avatar.textContent = avatarData.id;
+    } else {
+      // Fallback: use agent's default avatar emoji
+      avatar.style.backgroundImage = '';
+      avatar.style.backgroundColor = (agent.color || '#888') + '20';
+      avatar.style.backgroundSize = '';
+      avatar.textContent = agent.avatar || '🤖';
+    }
+  }
+
+  const body = document.createElement('div');
+  body.className = 'msg-body';
+
+  const sender = document.createElement('div');
+  sender.className = 'msg-sender';
+  sender.textContent = agent.name || '你';
+  sender.style.color = agent.color;
+
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble';
+  if (!isUser) {
+    const cfg = (appSettings?.agents || {})[agent.name] || {};
+    const style = cfg.bubble_style || 'solid';
+    const opacity = cfg.bubble_opacity || 30;
+    if (style === 'solid') {
+      const bgColor = cfg.bubble_color || '#1e2a3a';
+      bubble.style.background = bgColor;
+      bubble.style.border = `2px solid ${agent.color}60`;
+      bubble.style.borderLeft = `3px solid ${agent.color}`;
+    } else {
+      const hexAlpha = Math.min(opacity, 90).toString(16).padStart(2, '0');
+      bubble.style.background = agent.color + hexAlpha;
+      bubble.style.border = `1px solid ${agent.color}${Math.min(opacity + 15, 90).toString(16).padStart(2, '0')}`;
+    }
+    // Per-agent font color from localStorage (isolated per agent)
+    bubble.style.color = getAgentFontColor(agent.name);
+  }
+  bubble.textContent = content;
+
+  body.appendChild(sender);
+  body.appendChild(bubble);
+
+  if (emote) {
+    if (emote.type === 'image' && emote.url) {
+      const emDiv = document.createElement('div');
+      emDiv.className = 'msg-emote';
+      const img = document.createElement('img');
+      img.src = emote.url; img.alt = emote.mood || '';
+      emDiv.appendChild(img);
+      body.appendChild(emDiv);
+    }
+  }
+
+  row.appendChild(avatar);
+  row.appendChild(body);
+  return row;
+}
+
+// ============================================================
+// Auto chat / Mode
+// ============================================================
+function showAutoRound(round, total) {
+  const el = document.createElement('div');
+  el.className = 'auto-indicator';
+  el.id = 'auto-round';
+  el.textContent = `自动对话 - 第 ${round}/${total} 轮`;
+  const prev = document.getElementById('auto-round');
+  if (prev) prev.remove();
+  $messages.appendChild(el);
+  scrollBottom();
+}
+
+function stopAutoUI() {
+  const el = document.getElementById('auto-round');
+  if (el) el.textContent = '围观结束';
+  $btnStop.classList.remove('show');
+}
+
+function setMode(mode) {
+  currentMode = mode;
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'set_mode', mode }));
+  }
+  updateModeUI();
+}
+
+function updateModeUI() {
+  $btnModeFree.className = 'mode-btn' + (currentMode === 'free' ? ' active' : '');
+  $btnModeWatch.className = 'mode-btn' + (currentMode === 'watch' ? ' watch-active' : '');
+  const $btnParty = document.getElementById('btn-mode-party');
+  if ($btnParty) $btnParty.className = 'mode-btn' + (currentMode === 'party' ? ' active' : '');
+  // Hide choice bar when leaving party mode
+  if (currentMode !== 'party') {
+    document.getElementById('choice-bar').style.display = 'none';
+  }
+}
+
+function stopAuto() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'stop_auto' }));
+  }
+  stopAutoUI();
+}
+
+function endSession() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  $btnSend.disabled = true;
+  document.getElementById('btn-end').disabled = true;
+  ws.send(JSON.stringify({ type: 'end_session' }));
+}
+
+function onSessionEnded() {
+  $btnSend.disabled = false;
+  document.getElementById('btn-end').disabled = false;
+}
+
+// ============================================================
+// Conversation Sidebar
+// ============================================================
+let currentConvId = '';
+let currentConvTitle = '';
+
+function toggleSidebar() {
+  const bar = document.getElementById('conv-sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  const isOpen = bar.style.display === 'flex';
+  if (isOpen) { closeSidebar(); }
+  else {
+    bar.style.display = 'flex';
+    overlay.style.display = 'block';
+    refreshConvList();
+  }
+}
+
+function closeSidebar() {
+  document.getElementById('conv-sidebar').style.display = 'none';
+  document.getElementById('sidebar-overlay').style.display = 'none';
+}
+
+async function refreshConvList() {
+  try {
+    const r = await authFetch('/api/conversations');
+    const list = await r.json();
+    const el = document.getElementById('conv-list');
+    if (list.length === 0) {
+      el.innerHTML = '<div style="padding:20px;color:var(--text-secondary);font-size:13px;text-align:center;">暂无对话</div>';
+      return;
+    }
+    el.innerHTML = list.map(c => `
+      <div class="conv-item" onclick="switchConversation('${c.id}')" style="padding:12px 16px;cursor:pointer;border-radius:8px;margin-bottom:4px;transition:all 0.2s;${c.id===currentConvId?'background:rgba(124,58,237,0.15);border:1px solid rgba(124,58,237,0.3);':'border:1px solid transparent;'}" onmouseenter="this.style.background='${c.id===currentConvId?'':'rgba(255,255,255,0.03)'}'" onmouseleave="this.style.background='${c.id===currentConvId?'rgba(124,58,237,0.15)':'transparent'}'">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:180px;">${escHtml(c.title)}</span>
+          <button onclick="event.stopPropagation();deleteConversation('${c.id}')" style="background:none;border:none;color:var(--text-secondary);cursor:pointer;font-size:14px;opacity:0.5;padding:2px;" title="删除">✕</button>
+        </div>
+        <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">${c.msg_count}条 · ${c.updated}</div>
+      </div>
+    `).join('');
+  } catch(e) { /* ignore */ }
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function newConversation() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'new_conversation' }));
+  }
+}
+
+function switchConversation(convId) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'load_conversation', conv_id: convId }));
+  }
+}
+
+async function deleteConversation(convId) {
+  if (!confirm('确定删除这条对话？')) return;
+  await authFetch(`/api/conversations/${convId}`, { method: 'DELETE' });
+  refreshConvList();
+}
+
+// ============================================================
+// Chat History (clipboard export)
+// ============================================================
+function saveChatHistory() {
+  // Copy visible chat to clipboard as text
+  const bubbles = document.querySelectorAll('.msg-bubble');
+  const lines = [];
+  bubbles.forEach(b => {
+    const row = b.closest('.msg-row');
+    const sender = row?.querySelector('.msg-sender')?.textContent || '?';
+    lines.push(`[${sender}]: ${b.textContent?.replace(/[​]$/, '') || ''}`);
+  });
+  const text = lines.join('\n\n');
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.querySelector('[onclick="saveChatHistory()"]');
+    const orig = btn.textContent;
+    btn.textContent = '✓';
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  }).catch(() => {
+    const blob = new Blob([text], {type:'text/plain;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `nest-chat-${new Date().toISOString().slice(0,10)}.txt`;
+    a.click();
+  });
+}
+
+function loadChatHistory(messages) {
+  // Clear existing messages and reload
+  document.getElementById('messages').innerHTML = '';
+  messages.forEach(m => {
+    if (m.sender === '我') appendUserMessage(m.content);
+    else if (m.sender !== '系统') appendAgentMessage(m.sender, m.content, m.emote);
+  });
+}
+
+// ============================================================
+// Party Mode
+// ============================================================
+function openPartyModal() {
+  const sel = document.getElementById('party-gm-select');
+  sel.innerHTML = '';
+  Object.keys(AGENTS).forEach(name => {
+    const opt = document.createElement('option');
+    opt.value = name; opt.textContent = name;
+    sel.appendChild(opt);
+  });
+  document.getElementById('party-overlay').style.display = 'flex';
+}
+
+function closePartyModal() {
+  document.getElementById('party-overlay').style.display = 'none';
+}
+
+function startParty() {
+  const gm = document.getElementById('party-gm-select').value;
+  const freq = parseInt(document.getElementById('party-freq').value);
+  closePartyModal();
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'start_party', gm, choice_freq: freq }));
+  }
+}
+
+function showChoices(choicesText) {
+  const bar = document.getElementById('choice-bar');
+  bar.innerHTML = '';
+  const lines = choicesText.split('\n').filter(l => l.trim());
+  let hasButtons = false;
+  lines.forEach(line => {
+    const match = line.match(/^(\d+)[.、]\s*(.+)/);
+    if (match) {
+      hasButtons = true;
+      const btn = document.createElement('button');
+      btn.textContent = match[1] + '. ' + match[2];
+      btn.style.cssText = 'padding:8px 14px;border-radius:20px;border:1px solid #7c3aed;background:rgba(124,58,237,0.15);color:var(--text);cursor:pointer;text-align:left;font-size:13px;transition:all 0.2s;';
+      btn.onmouseenter = () => { btn.style.background = 'rgba(124,58,237,0.35)'; };
+      btn.onmouseleave = () => { btn.style.background = 'rgba(124,58,237,0.15)'; };
+      btn.onclick = () => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'party_choice', choice: match[2] }));
+        }
+        bar.style.display = 'none';
+      };
+      bar.appendChild(btn);
+    }
+  });
+  // Custom input row
+  if (hasButtons) {
+    const customRow = document.createElement('div');
+    customRow.style.cssText = 'display:flex;gap:8px;margin-top:4px;';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = '或者自己输入行动...';
+    input.style.cssText = 'flex:1;padding:8px 12px;border-radius:20px;border:1px dashed var(--border);background:var(--bg-input);color:var(--text);font-size:13px;outline:none;font-family:inherit;';
+    input.onkeydown = (e) => {
+      if (e.key === 'Enter' && input.value.trim()) {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'party_choice', choice: input.value.trim() }));
+        }
+        bar.style.display = 'none';
+      }
+    };
+    const sendBtn = document.createElement('button');
+    sendBtn.textContent = '→';
+    sendBtn.style.cssText = 'padding:6px 14px;border-radius:20px;border:none;background:#7c3aed;color:#fff;font-size:14px;cursor:pointer;';
+    sendBtn.onclick = () => {
+      if (input.value.trim() && ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'party_choice', choice: input.value.trim() }));
+        bar.style.display = 'none';
+      }
+    };
+    customRow.appendChild(input);
+    customRow.appendChild(sendBtn);
+    bar.appendChild(customRow);
+  }
+  bar.style.display = 'flex';
+  bar.scrollIntoView({ behavior: 'smooth' });
+}
+
+// ============================================================
+// Send
+// ============================================================
+function sendMessage() {
+  const content = $input.value.trim();
+  if (!content) return;
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({ type: 'user_message', content }));
+  $input.value = '';
+  $input.focus();
+}
+
+function onKeyDown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+function scrollBottom() { $messages.scrollTop = $messages.scrollHeight; }
+
+// ============================================================
+// DOM refs
+// ============================================================
+const $messages = document.getElementById('messages');
+const $status = document.getElementById('status');
+const $input = document.getElementById('input-msg');
+const $btnSend = document.getElementById('btn-send');
+const $btnStop = document.getElementById('btn-stop');
+const $btnModeFree = document.getElementById('btn-mode-free');
+const $btnModeWatch = document.getElementById('btn-mode-watch');
+
+// ============================================================
+// Mobile keyboard handling
+// ============================================================
+function handleKeyboard() {
+  if (!window.visualViewport) return;
+  const vv = window.visualViewport;
+  const app = document.getElementById('app');
+  const bar = document.getElementById('input-bar');
+
+  function updateBottom() {
+    // Calculate how much of the screen is taken by keyboard + browser bars
+    const occupied = window.innerHeight - vv.height - vv.offsetTop;
+    if (occupied > 50) {
+      // Keyboard is open — push input bar up by the occupied amount
+      bar.style.marginBottom = occupied + 'px';
+    } else {
+      bar.style.marginBottom = '';
+    }
+    scrollBottom();
+  }
+
+  vv.addEventListener('resize', updateBottom);
+  vv.addEventListener('scroll', updateBottom);
+  $input.addEventListener('focus', () => {
+    setTimeout(updateBottom, 100);
+    setTimeout(updateBottom, 400);
+    setTimeout(updateBottom, 800);
+  });
+  $input.addEventListener('blur', () => {
+    setTimeout(updateBottom, 300);
+  });
+}
+
+// ============================================================
+// Init
+// ============================================================
+handleKeyboard();
+loadAppearance();
+// Try to load settings first to check if password is needed
+(async function init() {
+  try {
+    const r = await fetch('/api/settings');
+    const s = await r.json();
+    if (!s.password) {
+      // No password set — skip login
+      document.getElementById('login-overlay').style.display = 'none';
+      connect();
+    } else if (AUTH_TOKEN) {
+      // Has stored token — try it
+      document.getElementById('login-overlay').style.display = 'none';
+      connect();
+    }
+    // Otherwise show login (default)
+  } catch(e) {
+    // Can't reach server, show login anyway
+  }
+})();
+$input.focus();
+</script>
+</body>
+</html>
